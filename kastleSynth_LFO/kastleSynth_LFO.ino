@@ -21,7 +21,7 @@ uint16_t lastAnalogValues[3];
 uint8_t runglerByte;
 
 uint16_t wsMap[10]={
-  0,30,97,161,255,   1,30,100,210,254};
+  0,120,150,180,255,   20,60,120,190,254};
 #define WSMAP_POINTS 5
 
 uint8_t mapLookup[256];
@@ -49,9 +49,14 @@ uint32_t curveMap(uint8_t value, uint8_t numberOfPoints, uint16_t * tableMap){
 
 
 void setup()  { 
+  digitalWrite(5,HIGH);
+  pinMode(4, INPUT);
+  digitalWrite(4,HIGH);
   createLookup();
   setTimers(); //setup audiorate interrupt
   runglerByte=random(255);
+
+
   pinMode(0, OUTPUT);
   // digitalWrite(0,LOW);
   pinMode(A1, INPUT);
@@ -60,8 +65,9 @@ void setup()  {
   pinMode(1, OUTPUT);
   pinMode(2, OUTPUT);
   pinMode(3, INPUT);
+   digitalWrite(4,LOW);
   pinMode(4, INPUT);
-  digitalWrite(5,HIGH);
+
   // digitalWrite(1,LOW);
 
   //  pinMode(1, INPUT_PULLUP);
@@ -116,31 +122,42 @@ bool render;
 bool cycle;
 const bool usePin[4]={
   true,false,true,false};
-uint8_t lfoValue;
+uint8_t lfoValue=0;
 bool lfoFlop=true;
 bool doReset=false;
+bool firstRead=false;
 ISR(ADC_vect){
 
   // if(isConversionFinished()){
-  lastAnalogValues[analogChannelRead]=analogValues[analogChannelRead];
-  analogValues[analogChannelRead]= getConversionResult();
-  if(analogChannelRead==2 &&  lastAnalogValues[2]!= analogValues[2]) setFrequency(mapLookup[analogValues[2]>>2]);
- // if(analogChannelRead==0 &&  analogValues[0]>650 && lastAnalogValues[0]<=650) doReset=true;
+
+
+  // if(analogChannelRead==0 &&  analogValues[0]>650 && lastAnalogValues[0]<=650) doReset=true;
   //if(analogChannelRead==PITCH && lastAnalogValues[PITCH]!=analogValues[PITCH]) setFrequency(analogValues[PITCH]);
   // if(analogChannelRead==WS_1 && lastAnalogValues[WS_1]!=analogValues[WS_1]) analogValues[WS_1]=map(analogValues[WS_1],LOW_MIX,HIGH_MIX,0,1024);
   // if(analogChannelRead==WS_2 && lastAnalogValues[WS_2]!=analogValues[WS_2]) analogValues[WS_2]=map(analogValues[WS_2],LOW_MIX,800,0,1024);
-  analogChannelRead++;
-  while(!usePin[analogChannelRead]){
+
+  if(!firstRead){
+    lastAnalogValues[analogChannelRead]=analogValues[analogChannelRead];
+    analogValues[analogChannelRead]= getConversionResult();
+    if(analogChannelRead==2 &&  lastAnalogValues[2]!= analogValues[2]) setFrequency(mapLookup[analogValues[2]>>2]);
+
     analogChannelRead++;
-    if(analogChannelRead>3) analogChannelRead=0;
-  }
-  /*
+    while(!usePin[analogChannelRead]){
+      analogChannelRead++;
+      if(analogChannelRead>3) analogChannelRead=0;
+    }
+    /*
     while(readADC[analogChannelRead]){
-   analogChannelRead++;
-   if(analogChannelRead>3) analogChannelRead=1;
-   }
-   */
-  if(analogChannelRead>2) analogChannelRead=2;
+     analogChannelRead++;
+     if(analogChannelRead>3) analogChannelRead=1;
+     }
+     */
+    if(analogChannelRead>2) analogChannelRead=2;
+    firstRead=true;
+  }
+  else{
+    firstRead=false;
+  }
   connectChannel(analogChannelRead);
   startConversion();
 
@@ -210,7 +227,8 @@ uint16_t counter;
 bool resetState=false;
 uint16_t runglerOut;
 bool lastDoReset;
-const uint8_t runglerMap[8]={0,80,120,150,180,200,220,255};
+const uint8_t runglerMap[8]={
+  0,80,120,150,180,200,220,255};
 ISR(TIMER1_COMPA_vect)  //audiorate interrupt
 {
 
@@ -247,7 +265,7 @@ ISR(TIMER1_COMPA_vect)  //audiorate interrupt
       newBit=TCNT0>>7;
     }
     else newBit=!newBit;
-    
+
     bitWrite(runglerByte,0,newBit);
     runglerOut=0;
     bitWrite(runglerOut,0,bitRead(runglerByte,0));
@@ -353,6 +371,8 @@ void _setFrequency(int _freq){
    */
 
 }
+
+
 
 
 

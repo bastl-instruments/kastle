@@ -20,7 +20,7 @@ void init() {
 
 // channel 8 can be used to measure the temperature of the chip
 void connectChannel(uint8_t number) {
-  ADMUX &= (11110000);
+  ADMUX &= (10110000);
   ADMUX |= number;
   //DIDR0  =  (1<<number);
 }

@@ -77,7 +77,7 @@ uint8_t out;
 #include <SAW.h>
 #include <CHEB4.h>
 void setup()  { 
-
+  digitalWrite(5,HIGH);
   createLookup();
   pinMode(0, OUTPUT);
   pinMode(1, OUTPUT);
@@ -85,7 +85,7 @@ void setup()  {
   //  pinMode(A1, INPUT);
   // pinMode(A2, INPUT);
   // pinMode(A3, INPUT);
-  digitalWrite(5,HIGH);
+
   //  pinMode(1, INPUT_PULLUP);
   // digitalWrite(1,LOW);
   //  analogRead(A3);
@@ -227,7 +227,7 @@ void loop() {
       OCR0A =   (((256-out)|waveShape) * (((char)pgm_read_byte_near(SIN256_DATA+_out))+128))>>8;
       ;
     }
-     lastOut=out;
+    lastOut=out;
   }
 
   if(mode==FM){
@@ -265,28 +265,35 @@ void loop() {
   //_delay_us(250);
 }
 uint8_t lastAnalogChannelRead;
+bool firstRead=false;
 ISR(ADC_vect){
 
   // if(isConversionFinished()){
-  lastAnalogValues[analogChannelRead]=analogValues[analogChannelRead];
-  analogValues[analogChannelRead]= getConversionResult()>>2;
-  lastAnalogChannelRead=analogChannelRead;
-  analogChannelRead++;
-  /*
+  if(!firstRead){
+    lastAnalogValues[analogChannelRead]=analogValues[analogChannelRead];
+    analogValues[analogChannelRead]= getConversionResult()>>2;
+    lastAnalogChannelRead=analogChannelRead;
+    analogChannelRead++;
+    if(analogChannelRead>3) analogChannelRead=0;
+    /*
     while(readADC[analogChannelRead]){
-   analogChannelRead++;
-   if(analogChannelRead>3) analogChannelRead=1;
-   }
-   */
-  if(analogChannelRead>3) analogChannelRead=0;
+     analogChannelRead++;
+     if(analogChannelRead>3) analogChannelRead=1;
+     }
+     */
+
+
+    if(lastAnalogChannelRead==PITCH && lastAnalogValues[PITCH]!=analogValues[PITCH]) setFrequency(constrain(mapLookup[analogValues[PITCH]]<<2,0,1015));//constrain(map(analogValues[PITCH],100,HIGH_MIX,0,1024),0,1000));////
+    if(lastAnalogChannelRead==WS_1 && lastAnalogValues[WS_1]!=analogValues[WS_1]) analogValues[WS_1]= mapLookup[analogValues[WS_1]];//constrain(map(analogValues[WS_1],LOW_MIX,HIGH_MIX,0,1024),0,1023);////
+    if(lastAnalogChannelRead==WS_2 && lastAnalogValues[WS_2]!=analogValues[WS_2]) analogValues[WS_2]= mapLookup[analogValues[WS_2]];//constrain(map(analogValues[WS_2],LOW_MIX,HIGH_MIX,0,1024),0,1023); //
+
+  }
+  else{
+    firstRead=false;
+  }
+
+
   connectChannel(analogChannelRead);
-
-  if(lastAnalogChannelRead==PITCH && lastAnalogValues[PITCH]!=analogValues[PITCH]) setFrequency(constrain(mapLookup[analogValues[PITCH]]<<2,0,1015));//constrain(map(analogValues[PITCH],100,HIGH_MIX,0,1024),0,1000));////
-  if(lastAnalogChannelRead==WS_1 && lastAnalogValues[WS_1]!=analogValues[WS_1]) analogValues[WS_1]= mapLookup[analogValues[WS_1]];//constrain(map(analogValues[WS_1],LOW_MIX,HIGH_MIX,0,1024),0,1023);////
-  if(lastAnalogChannelRead==WS_2 && lastAnalogValues[WS_2]!=analogValues[WS_2]) analogValues[WS_2]= mapLookup[analogValues[WS_2]];//constrain(map(analogValues[WS_2],LOW_MIX,HIGH_MIX,0,1024),0,1023); //
-
-
-
   startConversion();
 
 
@@ -358,6 +365,7 @@ uint16_t getConversionResult() {
   uint16_t result = ADCL;
   return result | (ADCH<<8);
 }
+
 
 
 
