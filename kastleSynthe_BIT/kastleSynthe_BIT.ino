@@ -1,46 +1,46 @@
 
 /*
 KASTLE VCO v 1.0
-
-
-Features
--3 synthesis modes = phase modulation, phase distortion, tarck & hold modulation
--regular waveform output by PWM
--square wave output
--3 sound parameters controlled by voltage inputs
--voltage selectable synthesis modes on weak I/O Reset pin
-
-
-ideas 
+ 
+ 
+ Features
+ -3 synthesis modes = phase modulation, phase distortion, tarck & hold modulation
+ -regular waveform output by PWM
+ -square wave output
+ -3 sound parameters controlled by voltage inputs
+ -voltage selectable synthesis modes on weak I/O Reset pin
+ 
+ 
+ ideas 
  -transfer wavetable to ram and see if it is faster
  -update parameters at the beginning of waveoform cycle to see if it improoves stability
  -dynamicly lower the resolution of the VCO
  
-Writen by Vaclav Pelousek 2016
-open source license: CC BY SA
-http://www.bastl-instruments.com
+ Writen by Vaclav Pelousek 2016
+ open source license: CC BY SA
+ http://www.bastl-instruments.com
  
  
--software written in Arduino 1.0.6 - used to flash ATTINY 85 running at 8mHz
--created with help of the heavenly powers of internet and several tutorials that you can google out
--i hope somebody finds this code usefull
-
-thanks to 
--Lennart Schierling for making some work on the register access
--Uwe Schuller for explaining the capacitance of zener diodes
--Peter Edwards for making the inspireing bitRanger
--Ondrej Merta for being the best boss
--and the whole bastl crew that made this project possible
-
+ -software written in Arduino 1.0.6 - used to flash ATTINY 85 running at 8mHz
+ -created with help of the heavenly powers of internet and several tutorials that you can google out
+ -i hope somebody finds this code usefull
+ 
+ thanks to 
+ -Lennart Schierling for making some work on the register access
+ -Uwe Schuller for explaining the capacitance of zener diodes
+ -Peter Edwards for making the inspireing bitRanger
+ -Ondrej Merta for being the best boss
+ -and the whole bastl crew that made this project possible
+ 
  */
- 
+
 #define F_CPU 8000000  // This is used by delay.h library
 #include <stdlib.h>
 #include <avr/interrupt.h>
 #include <avr/io.h>        // Adds useful constants
 #include <util/delay.h>
 
-#include "SINE.h" //sinewave wavetable - modified but originnaly from the Mozzi library
+//#include <SINE.h> //sinewave wavetable - modified but originnaly from the Mozzi library
 //#include <SAW.h>
 //#include <CHEB4.h>
 
@@ -54,7 +54,7 @@ const int Tx = 3;
 //global variables
 #define WSMAP_POINTS 5
 uint16_t wsMap[10]={
-  0,63,127,191,234,   15,100,160,210,254};
+  0,63,127,191,230,   1,100,160,210,254};
 
 
 uint8_t _out;
@@ -79,8 +79,8 @@ uint8_t pwmIncrement,_upIncrement,_downIncrement,upIncrement,downIncrement;
 bool quantizer;
 const uint8_t analogToDigitalPinMapping[4]={ 
   6,PORTB2,PORTB4,PORTB3};
-  
-  
+
+
 //defines for synth types
 //all are dual oscillator setups - 
 #define PHASE_DIST 0 // phase distortion -
@@ -127,13 +127,14 @@ void setup()  { //happends at the startup
   createLookup(); //mapping of knob values is done thru a lookuptable which is generated at startup from defined values
   //set outputs
   pinMode(0, OUTPUT);
-  pinMode(1, OUTPUT);
+  digitalWrite(1, HIGH);
+  pinMode(1, INPUT);
   //serial for debugging only
   //mySerial.begin(9600);
-  
+
   setTimers(); //setup interrupts
 
-  //setup ADC and run it in interrupt
+    //setup ADC and run it in interrupt
   init();
   connectChannel(analogChannelRead);
   startConversion();
@@ -180,57 +181,88 @@ ISR(TIMER0_OVF_vect){ // increment _clocks at PWM interrupt overflow - this give
   _clocks++; 
 }
 
-
+uint32_t t;
 ISR(TIMER1_COMPA_vect)  // render primary oscillator in the interupt
 {
- 
-  out+=incr; // increment the oscillator saw core
-  if((analogValues[WS_2])<pwmCounter) OCR0B=255; //render pulse oscillator output
-  else OCR0B=0;
-  
-  pwmCounter=out<<1; // speed up the frequency of the square wave output twice
+  uint8_t increment=analogValues[WS_2]>>4;
+
+  t+=(analogValues[WS_1]+1);//3;
+  // mode=analogValues[WS_2]>>4;
+  switch(mode){
+  case 0:
+    OCR0A =  byte(((t*(t>>2&t>>9)&increment*2&t>>9))|(t&t>>increment|t>>8));
+    break;
+  case 1:
+    OCR0A = byte((t|(t>>increment|t>>7)*increment*t&(t>>11|t>>9)));
+    break;
+  case 2:
+    OCR0A = byte(t*increment&(t>>7)|t*3&(t*4>>(increment/5)));
+    break;
+  case 3:
+    OCR0A = byte((t>>7|t|t>>6)*10+increment*(t&t>>(increment/3)|t>>6));
+    break;
+  case 4:
+    OCR0A =byte((t>>increment&t|t>>6)*10&(t|t>>2*increment&t>>6|t|increment));
+    break;
+  case 5:
+    OCR0A = byte(((t>>increment*(t>>11&t>>3)&t*2&t>>9))&(t&t>>increment|t>>8)&t>>3);
+    break;
+  case 6:
+    OCR0A = byte(((t+increment)>>7|t|3)&t*increment|(t&t>>5|t>>9)); 
+    break;
+  case 7:
+    OCR0A = byte((t*((t|(t>>9)|2&t>>11))&(increment*(t>>5|increment|t>>3)))|(t&t>>increment|t>>7)); 
+    break;
+  case 8:
+    OCR0A = byte((t*(t>>5|t>>8))>>(t>>increment)); 
+    break;
+  case 9:
+    OCR0A =byte( (t*(t>>5|t>>8))>>(t>>increment));
+    break;
+  case 10:
+    OCR0A = byte(t*((t>>9|t>>13)&increment&t>>6));
+    break;
+  case 11:
+    OCR0A =byte(t*(t>>11&t>>8&increment&t>>3));
+    break;
+  case 12:
+    OCR0A = byte((t*(t>>8*(t>>(increment-5)|t>>8)&(increment|(t>>19)*5>>t|t>>3))));
+    break;
+  case 13:
+    OCR0A = byte((((-t&4095)*(increment*2&t*(t&t>>13))>>12)+(increment&t*((increment*2-20)&t>>8&t>>3)>>(3&t>>14))))<<2;
+    break;
+
+  }
+  // increment the oscillator saw core
+ // if((analogValues[WS_2])<pwmCounter) OCR0B=255; //render pulse oscillator output
+ // else OCR0B=0;
+
+ // pwmCounter=out<<1; // speed up the frequency of the square wave output twice
   TCNT1 = 0; //reset interupt couter
 }
 
-
+bool resetState;
 
 void loop() { 
 
-  if(mode==PHASE_DIST){
+  bool newState=bitRead(PINB,PINB1);
+  if(newState&& !resetState) t=0;
+  resetState=newState;
 
-    if(out<incr){ //sync oscillators
-      _out=0;
-    }
-    uint8_t waveShape=(analogValues[WS_2])<<1;
-    if(analogValues[WS_2]>170) {
-      if(out!=lastOut) OCR0A =   (((256-out)|waveShape) * (((char)pgm_read_byte_near(SIN256_DATA+_out))+128))>>8;  
-    }
-    else{
-      OCR0A =   (((256-out)|waveShape) * (((char)pgm_read_byte_near(SIN256_DATA+_out))+128))>>8;
-    }
-    lastOut=out;
-  }
-
-  if(mode==FM){
-    uint8_t _mod= ((((analogValues[WS_2])+1)*((char)pgm_read_byte_near(SIN256_DATA+_out)+128))>>6) +out;
-    OCR0A=  (char)pgm_read_byte_near(SIN256_DATA+_mod)+128;
-  }
-
-  if(mode==TAH){
-    if(out>(analogValues[WS_2]-15)){
-      OCR0A=  (char)pgm_read_byte_near(SIN256_DATA+_out)+128;
-    }
-  }
-
+  /*
   if(clocks()-time>((osc2offset-analogValues[WS_1])<<bitShift)){ // render secondary oscillator in the loop
    time=clocks(); 
-    _out+=_incr; // increment the oscillator saw core
-  }
-  else{
-    if(analogValues[0]<LOW_THRES)  mode=PHASE_DIST, incr=11,_incr=6, bitShift=2, osc2offset=270; 
-    else if(analogValues[0]>HIGH_THRES) mode=TAH, incr=24,_incr=6,bitShift=4,osc2offset=255;
-    else mode = FM, incr=11,_incr=5,bitShift=4,osc2offset=255;
-  }
+   _out+=_incr; // increment the oscillator saw core
+   }
+   else{
+   if(analogValues[0]<LOW_THRES)  mode=PHASE_DIST, incr=11,_incr=6, bitShift=2, osc2offset=270; 
+   else if(analogValues[0]>HIGH_THRES) mode=TAH, incr=24,_incr=6,bitShift=4,osc2offset=255;
+   else mode = FM, incr=11,_incr=5,bitShift=4,osc2offset=255;
+   }
+   */
+  if(analogValues[0]<LOW_THRES)  mode=6, incr=0,_incr=6, bitShift=2, osc2offset=270; 
+  else if(analogValues[0]>HIGH_THRES) mode=7, incr=2,_incr=6,bitShift=4,osc2offset=255;
+  else mode = 0, incr=11,_incr=1,bitShift=4,osc2offset=255;
   //_delay_us(250);
 }
 
@@ -239,31 +271,31 @@ void loop() {
 
 ISR(ADC_vect){ // interupt triggered ad completion of ADC counter
   if(!firstRead){ // discard first reading due to ADC multiplexer crosstalk
-  //update values and remember last values
+    //update values and remember last values
     lastAnalogValues[analogChannelRead]=analogValues[analogChannelRead];
     analogValues[analogChannelRead]= getConversionResult()>>2;
-  //set ADC MULTIPLEXER to read the next channel
+    //set ADC MULTIPLEXER to read the next channel
     lastAnalogChannelRead=analogChannelRead;
     analogChannelRead++;
     if(analogChannelRead>3) analogChannelRead=0;
     connectChannel(analogChannelRead);
-  // set controll values if relevant (value changed)
-    if(lastAnalogChannelRead==PITCH && lastAnalogValues[PITCH]!=analogValues[PITCH]) setFrequency(constrain(mapLookup[analogValues[PITCH]]<<2,0,1015));
+    // set controll values if relevant (value changed)
+    if(lastAnalogChannelRead==PITCH && lastAnalogValues[PITCH]!=analogValues[PITCH]) setFrequency(constrain(mapLookup[analogValues[PITCH]]<<2,0,700));
     if(lastAnalogChannelRead==WS_1 && lastAnalogValues[WS_1]!=analogValues[WS_1]) analogValues[WS_1]= mapLookup[analogValues[WS_1]];
     if(lastAnalogChannelRead==WS_2 && lastAnalogValues[WS_2]!=analogValues[WS_2]) analogValues[WS_2]= mapLookup[analogValues[WS_2]];
     firstRead=true;
-  //start the ADC - at completion the interupt will be called again
+    //start the ADC - at completion the interupt will be called again
     startConversion();
 
   }
   else{ 
     /* 
-    at the first reading off the ADX (which will not used) 
-    something else will happen the input pin will briefly turn to output to 
-    discarge charge built up in passive mixing ciruit using zener diodes
-    because zeners have some higher unpredictable capacitance, various voltages might get stuck on the pin
-    */
-    if( mode==PHASE_DIST && analogChannelRead!=PITCH){ //this would somehow make the  reset pin trigger because the reset pin is already pulled to ground
+     at the first reading off the ADX (which will not used) 
+     something else will happen the input pin will briefly turn to output to 
+     discarge charge built up in passive mixing ciruit using zener diodes
+     because zeners have some higher unpredictable capacitance, various voltages might get stuck on the pin
+     */
+    if( incr==0 && analogChannelRead!=PITCH){ //this would somehow make the  reset pin trigger because the reset pin is already pulled to ground
     }
     else{ 
       if(analogValues[analogChannelRead]<200) bitWrite(DDRB,analogToDigitalPinMapping[analogChannelRead],1);
@@ -296,7 +328,7 @@ void setFrequency(int _freq){ //set frequency of the interupt for primary oscill
 
 // #### FUNCTIONS TO ACCES ADC REGISTERS
 void init() {
-  
+
   ADMUX  = 0;
   bitWrite(ADCSRA,ADEN,1); //adc enabled
   bitWrite(ADCSRA,ADPS2,1); // set prescaler
@@ -330,3 +362,8 @@ uint16_t getConversionResult() {
   uint16_t result = ADCL;
   return result | (ADCH<<8);
 }
+
+
+
+
+

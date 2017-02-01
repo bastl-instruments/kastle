@@ -1,29 +1,29 @@
 
 /*
 KASTLE LFO v 1.0
-
-
-Features
-
-Writen by Vaclav Pelousek 2016
-open source license: CC BY SA
-http://www.bastl-instruments.com
  
  
--software written in Arduino 1.0.6 - used to flash ATTINY 85 running at 8mHz
--created with help of the heavenly powers of internet and several tutorials that you can google out
--i hope somebody finds this code usefull
-
-thanks to 
--Lennart Schierling for making some work on the register access
--Uwe Schuller for explaining the capacitance of zener diodes
--Peter Edwards for making the inspireing bitRanger
--Rob Hordijk for inventing the amazing concept of the Rungler
--Ondrej Merta for being the best boss
--and the whole bastl crew that made this project possible
-
+ Features
+ 
+ Writen by Vaclav Pelousek 2016
+ open source license: CC BY SA
+ http://www.bastl-instruments.com
+ 
+ 
+ -software written in Arduino 1.0.6 - used to flash ATTINY 85 running at 8mHz
+ -created with help of the heavenly powers of internet and several tutorials that you can google out
+ -i hope somebody finds this code usefull
+ 
+ thanks to 
+ -Lennart Schierling for making some work on the register access
+ -Uwe Schuller for explaining the capacitance of zener diodes
+ -Peter Edwards for making the inspireing bitRanger
+ -Rob Hordijk for inventing the amazing concept of the Rungler
+ -Ondrej Merta for being the best boss
+ -and the whole bastl crew that made this project possible
+ 
  */
- 
+
 #define F_CPU 8000000  // This is used by delay.h library
 #include <stdlib.h>
 #include <avr/interrupt.h>
@@ -40,7 +40,7 @@ thanks to
 uint8_t analogChannelRead=1;
 uint16_t analogValues[3];
 uint16_t lastAnalogValues[3];
-uint8_t runglerByte;
+//uint8_t runglerByte;
 int pwmCounter;
 uint16_t upIncrement=0;
 uint16_t downIncrement=255;
@@ -53,11 +53,11 @@ bool goingUp;
 uint16_t counter;
 
 bool resetState=false;
-uint16_t runglerOut;
+//uint16_t runglerOut;
 bool lastDoReset;
 const uint8_t runglerMap[8]={
   0,80,120,150,180,200,220,255};
-  
+
 //uint16_t wsMap[10]={ 0,120,150,180,255,   20,60,120,190,254};
 
 
@@ -78,8 +78,8 @@ bool doReset=false;
 bool firstRead=false;
 const uint8_t analogToDigitalPinMapping[4]={
   7,PORTB2,PORTB4,PORTB3};
-  
-  
+
+
 uint16_t wsMap[10]={ 
   0,60,127,191,255,   50,127,190,230,254};
 
@@ -108,14 +108,15 @@ uint32_t curveMap(uint8_t value, uint8_t numberOfPoints, uint16_t * tableMap){
   return map(value,inMin,inMax,outMin,outMax);
 }
 
-
+uint8_t byte1, byte2, out1, out2;
 void setup()  { 
   digitalWrite(5,HIGH);
   pinMode(4, INPUT);
   digitalWrite(4,HIGH);
   createLookup();
   setTimers(); //setup audiorate interrupt
-  runglerByte=random(255);
+  out1=random(255);
+  out2=random(255);
   pinMode(0, OUTPUT);
   pinMode(A1, INPUT);
   pinMode(A2, INPUT);
@@ -161,13 +162,23 @@ void setTimers(void)
   sei();
 }
 
-  
+uint8_t bitInState;
 ISR(ADC_vect){
   if(!firstRead){
     lastAnalogValues[analogChannelRead]=analogValues[analogChannelRead];
     analogValues[analogChannelRead]= getConversionResult();
     if(analogChannelRead==2 &&  lastAnalogValues[2]!= analogValues[2]) setFrequency(mapLookup[analogValues[2]>>2]);
-
+    if(analogChannelRead==0 &&  lastAnalogValues[0]!= analogValues[0]){
+      if((analogValues[0]>>2)<150){
+        bitInState=0;
+      }
+      else if((analogValues[0]>>2)>162){
+        bitInState=2;
+      }
+      else{
+        bitInState=1;
+      }
+    }
     analogChannelRead++;
     while(!usePin[analogChannelRead]){
       analogChannelRead++;
@@ -178,6 +189,7 @@ ISR(ADC_vect){
     connectChannel(analogChannelRead);
     firstRead=true;
     startConversion();
+
   }
   else {
     if(analogChannelRead==2){
@@ -193,42 +205,62 @@ ISR(ADC_vect){
 
 
 void loop() { 
- //pure nothingness
+  //pure nothingness
 }
 
+uint8_t processRunglerByte(uint8_t runglerByte){
+
+  bool newBit= bitRead(runglerByte,7) ;
+  runglerByte=runglerByte<<1;
+  if(bitInState==0){
+    newBit=newBit;
+  }
+  else if(bitInState==2){
+    newBit=TCNT0>>7;
+  }
+  else newBit=!newBit;
+  bitWrite(runglerByte,0,newBit);
+  return runglerByte;
+}
+uint8_t calculateRunglerOut(uint8_t runglerByte){
+  uint8_t runglerOut=0;
+  bitWrite(runglerOut,0,bitRead(runglerByte,0));
+  bitWrite(runglerOut,1,bitRead(runglerByte,3));
+  bitWrite(runglerOut,2,bitRead(runglerByte,5));
+  runglerOut=runglerMap[runglerOut]; 
+  return runglerOut;
+}
+
+uint16_t pattern[3]={
+  word(B00010000,B01000001), word(B00010001,B00010001),word(B0000001,B00000001)} 
+;
+uint8_t lastLfoValue;
 ISR(TIMER1_COMPA_vect)  //audiorate interrupt
 {
+  lastLfoValue=lfoValue;
   lfoValue++;
-  if(lfoFlop && lfoValue<200) bitWrite(PORTB,PINB2, 1);
-  else bitWrite(PORTB,PINB2, 0);
+  if(lfoValue>15) lfoValue=0;
+
+  bitWrite(PORTB,PINB2, bitRead(pattern[bitInState],lfoValue));
+
+
   doReset=bitRead(PINB,PINB3);
   if(!lastDoReset && doReset) {
     lfoValue=0, lfoFlop=0;
   }
   lastDoReset=doReset;
+
   if(lfoValue==0){
-    lfoFlop=!lfoFlop;
-   
-    bool newBit= bitRead(runglerByte,7) ;
-    runglerByte=runglerByte<<1;
-    if((analogValues[0]>>2)<150){
-      newBit=newBit;
-    }
-    else if((analogValues[0]>>2)>162){
-      newBit=TCNT0>>7;
-    }
-    else newBit=!newBit;
-    bitWrite(runglerByte,0,newBit);
-    runglerOut=0;
-    bitWrite(runglerOut,0,bitRead(runglerByte,0));
-    bitWrite(runglerOut,1,bitRead(runglerByte,3));
-    bitWrite(runglerOut,2,bitRead(runglerByte,5));
-    runglerOut=runglerMap[runglerOut];
+    byte1=processRunglerByte(byte1);
+    out1=calculateRunglerOut(byte1);
+    OCR0A= out1;
   }
-  if(lfoFlop) out =255-lfoValue;
-  else out=lfoValue;
-  OCR0B= constrain(out,0,255);
-  OCR0A= runglerOut;
+  if(lfoValue>>3 != lastLfoValue>>3){
+    byte2=processRunglerByte(byte2);
+    out2=calculateRunglerOut(byte2);
+  }
+  OCR0B= out2;//constrain(out,0,255);
+
   TCNT1 = 0; 
 }
 
@@ -245,7 +277,7 @@ void setFrequency(int _freq){
 
 // #### FUNCTIONS TO ACCES ADC REGISTERS
 void init() {
-  
+
   ADMUX  = 0;
   bitWrite(ADCSRA,ADEN,1); //adc enabled
   bitWrite(ADCSRA,ADPS2,1); // set prescaler
@@ -279,3 +311,8 @@ uint16_t getConversionResult() {
   uint16_t result = ADCL;
   return result | (ADCH<<8);
 }
+
+
+
+
+
