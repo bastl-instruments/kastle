@@ -1,39 +1,39 @@
 
 /*
 KASTLE VCO v 1.0
-
-
-Features
--3 synthesis modes = phase modulation, phase distortion, tarck & hold modulation
--regular waveform output by PWM
--square wave output
--3 sound parameters controlled by voltage inputs
--voltage selectable synthesis modes on weak I/O Reset pin
-
-
-ideas 
+ 
+ 
+ Features
+ -3 synthesis modes = phase modulation, phase distortion, tarck & hold modulation
+ -regular waveform output by PWM
+ -square wave output
+ -3 sound parameters controlled by voltage inputs
+ -voltage selectable synthesis modes on weak I/O Reset pin
+ 
+ 
+ ideas 
  -transfer wavetable to ram and see if it is faster
  -update parameters at the beginning of waveoform cycle to see if it improoves stability
  -dynamicly lower the resolution of the VCO
  
-Writen by Vaclav Pelousek 2016
-open source license: CC BY SA
-http://www.bastl-instruments.com
+ Writen by Vaclav Pelousek 2016
+ open source license: CC BY SA
+ http://www.bastl-instruments.com
  
  
--software written in Arduino 1.0.6 - used to flash ATTINY 85 running at 8mHz
--created with help of the heavenly powers of internet and several tutorials that you can google out
--i hope somebody finds this code usefull
-
-thanks to 
--Lennart Schierling for making some work on the register access
--Uwe Schuller for explaining the capacitance of zener diodes
--Peter Edwards for making the inspireing bitRanger
--Ondrej Merta for being the best boss
--and the whole bastl crew that made this project possible
-
+ -software written in Arduino 1.0.6 - used to flash ATTINY 85 running at 8mHz
+ -created with help of the heavenly powers of internet and several tutorials that you can google out
+ -i hope somebody finds this code usefull
+ 
+ thanks to 
+ -Lennart Schierling for making some work on the register access
+ -Uwe Schuller for explaining the capacitance of zener diodes
+ -Peter Edwards for making the inspireing bitRanger
+ -Ondrej Merta for being the best boss
+ -and the whole bastl crew that made this project possible
+ 
  */
- 
+
 #define F_CPU 8000000  // This is used by delay.h library
 #include <stdlib.h>
 #include <avr/interrupt.h>
@@ -63,7 +63,7 @@ uint8_t mode;
 uint8_t analogChannelRead=1;
 uint8_t analogValues[4];
 uint8_t lastAnalogValues[4];
-uint8_t out;
+int out;
 uint8_t pwmCounter;
 uint8_t mapLookup[256];
 uint8_t _clocks;
@@ -79,8 +79,8 @@ uint8_t pwmIncrement,_upIncrement,_downIncrement,upIncrement,downIncrement;
 bool quantizer;
 const uint8_t analogToDigitalPinMapping[4]={ 
   6,PORTB2,PORTB4,PORTB3};
-  
-  
+
+
 //defines for synth types
 //all are dual oscillator setups - 
 #define PHASE_DIST 0 // phase distortion -
@@ -130,10 +130,10 @@ void setup()  { //happends at the startup
   pinMode(1, OUTPUT);
   //serial for debugging only
   //mySerial.begin(9600);
-  
+
   setTimers(); //setup interrupts
 
-  //setup ADC and run it in interrupt
+    //setup ADC and run it in interrupt
   init();
   connectChannel(analogChannelRead);
   startConversion();
@@ -155,14 +155,6 @@ void setTimers(void)
    bitWrite(TCCR0B,WGM02,0);
    bitWrite(TCCR0B,CS00,1);
    */
-   PLLCSR |= (1 << PLLE);               // Enable PLL (64 MHz)
-  _delay_us(100);                      // Wait for a steady state
-  while (!(PLLCSR & (1 << PLOCK)));    // Ensure PLL lock
-  PLLCSR |= (1 << PCKE);               // Enable PLL as clock source for timer 1
-
-  cli();                               // Interrupts OFF (disable interrupts globally)
-  
-  
   TCCR0A = 2<<COM0A0 | 2<<COM0B0 | 3<<WGM00;
   TCCR0B = 0<<WGM02 | 1<<CS00;
 
@@ -191,54 +183,103 @@ ISR(TIMER0_OVF_vect){ // increment _clocks at PWM interrupt overflow - this give
 
 ISR(TIMER1_COMPA_vect)  // render primary oscillator in the interupt
 {
- 
-  out+=incr; // increment the oscillator saw core
-  if((analogValues[WS_2])<pwmCounter) OCR0B=255; //render pulse oscillator output
-  else OCR0B=0;
-  
-  pwmCounter=out<<1; // speed up the frequency of the square wave output twice
+
+  // out+=1;//incr; // increment the oscillator saw core
+  if(mode==TAH) flop=1;
+  if(flop) out+=incr;
+  else out-=incr;
+  if(mode==TAH){
+    if(out>=255) out=0;
+  }
+  if(out>=255) flop=0;//!flop;
+  if(out<=0) flop=1;
+  out=constrain(out,0,255);
+  //OCR0A=ultimateFold(amplify((char)pgm_read_byte_near(SIN256_DATA+out)+128,analogValues[WS_1],analogValues[WS_2]));
+  //);//analogValues[WS_1],analogValues[WS_2]))+128;
+
+
+  //  pwmCounter=out<<1; // speed up the frequency of the square wave output twice
   TCNT1 = 0; //reset interupt couter
 }
 
+int amplify(uint8_t _input, uint8_t _amplification, uint8_t _offset){
+  int _output=0;
+  _output=((int(_input-128)*(int)_amplification)/16) +(int((int)_offset-128)*(int)_amplification)/8;//+_offset<<2;//(int(_input)+int(_offset))*int(_amplification>>5);
+  // _output=(int(_input))*int(_amplification);
+  return _output;
+}
+int noFold(int _input){
+  return _input;
+}
+int oneFold(int _input){
+  int _output=_input;
+  if(_input>255) _output=255-(_input-255);
+  if(_input<0) _output=0-_input;
+  return _output;
+}
+
+int ultimateFold(int _input){
+  int _output=_input;
+  while(_output>255 || _output<0){
+    if(_output>255) _output=255-(_output-255);
+    if(_output<0) _output=0-_output;
+  }
+  return _output;
+}
 
 
 void loop() { 
-
-  if(mode==PHASE_DIST){
-
-    if(out<incr){ //sync oscillators
-      _out=0;
-    }
-    uint8_t waveShape=(analogValues[WS_2])<<1;
-    if(analogValues[WS_2]>170) {
-      if(out!=lastOut) OCR0A =   (((256-out)|waveShape) * (((char)pgm_read_byte_near(SIN256_DATA+_out))+128))>>8;  
-    }
-    else{
-      OCR0A =   (((256-out)|waveShape) * (((char)pgm_read_byte_near(SIN256_DATA+_out))+128))>>8;
-    }
-    lastOut=out;
-  }
-
   if(mode==FM){
-    uint8_t _mod= ((((analogValues[WS_2])+1)*((char)pgm_read_byte_near(SIN256_DATA+_out)+128))>>6) +out;
-    OCR0A=  (char)pgm_read_byte_near(SIN256_DATA+_mod)+128;
+    OCR0A=(out+constrain(ultimateFold(amplify(out,constrain(analogValues[WS_1]-10,0,255),analogValues[WS_2])+128),0,255))>>1;
+    if((analogValues[WS_2])<out) OCR0B=255; //render pulse oscillator output
+    else OCR0B=0;
   }
-
   if(mode==TAH){
-    if(out>(analogValues[WS_2]-15)){
-      OCR0A=  (char)pgm_read_byte_near(SIN256_DATA+_out)+128;
-    }
+    OCR0A=(out+ultimateFold(amplify(out,constrain(analogValues[WS_1]-10,0,255),analogValues[WS_2])+128))>>1;
+    if((analogValues[WS_2])<out) OCR0B=255; //render pulse oscillator output
+    else OCR0B=0;
+  }
+  if(mode==PHASE_DIST){
+    OCR0A=oneFold(amplify(out,constrain(analogValues[WS_1]-10,0,255),analogValues[WS_2])+128);
+    if((analogValues[WS_2])<out) OCR0B=255; //render pulse oscillator output
+    else OCR0B=0;  
   }
 
-  if(clocks()-time>((osc2offset-analogValues[WS_1])<<bitShift)){ // render secondary oscillator in the loop
-   time=clocks(); 
-    _out+=_incr; // increment the oscillator saw core
-  }
-  else{
-    if(analogValues[0]<LOW_THRES)  mode=PHASE_DIST, incr=11,_incr=6, bitShift=2, osc2offset=270; 
-    else if(analogValues[0]>HIGH_THRES) mode=TAH, incr=24,_incr=6,bitShift=4,osc2offset=255;
-    else mode = FM, incr=11,_incr=5,bitShift=4,osc2offset=255;
-  }
+
+
+  /*
+  if(mode==PHASE_DIST){
+   
+   if(out<incr){ //sync oscillators
+   _out=0;
+   }
+   uint8_t waveShape=(analogValues[WS_2])<<1;
+   if(analogValues[WS_2]>170) {
+   if(out!=lastOut) OCR0A =   (((256-out)|waveShape) * (((char)pgm_read_byte_near(SIN256_DATA+_out))+128))>>8;  
+   }
+   else{
+   OCR0A =   (((256-out)|waveShape) * (((char)pgm_read_byte_near(SIN256_DATA+_out))+128))>>8;
+   }
+   lastOut=out;
+   }
+   
+   if(mode==FM){
+   uint8_t _mod= ((((analogValues[WS_2])+1)*((char)pgm_read_byte_near(SIN256_DATA+_out)+128))>>6) +out;
+   OCR0A=  (char)pgm_read_byte_near(SIN256_DATA+_mod)+128;
+   }
+   
+   if(mode==TAH){
+   if(out>(analogValues[WS_2]-15)){
+   OCR0A=  (char)pgm_read_byte_near(SIN256_DATA+_out)+128;
+   }
+   }
+   */
+
+
+  if(analogValues[0]<LOW_THRES)  mode=PHASE_DIST, incr=7,_incr=6, bitShift=2, osc2offset=270; 
+  else if(analogValues[0]>HIGH_THRES) mode=TAH, incr=7,_incr=6,bitShift=4,osc2offset=255;
+  else mode = FM, incr=7,_incr=5,bitShift=4,osc2offset=255;
+
   //_delay_us(250);
 }
 
@@ -247,30 +288,30 @@ void loop() {
 
 ISR(ADC_vect){ // interupt triggered ad completion of ADC counter
   if(!firstRead){ // discard first reading due to ADC multiplexer crosstalk
-  //update values and remember last values
+    //update values and remember last values
     lastAnalogValues[analogChannelRead]=analogValues[analogChannelRead];
     analogValues[analogChannelRead]= getConversionResult()>>2;
-  //set ADC MULTIPLEXER to read the next channel
+    //set ADC MULTIPLEXER to read the next channel
     lastAnalogChannelRead=analogChannelRead;
     analogChannelRead++;
     if(analogChannelRead>3) analogChannelRead=0;
     connectChannel(analogChannelRead);
-  // set controll values if relevant (value changed)
-    if(lastAnalogChannelRead==PITCH && lastAnalogValues[PITCH]!=analogValues[PITCH]) setFrequency(constrain(mapLookup[analogValues[PITCH]]<<2,0,1015));
+    // set controll values if relevant (value changed)
+    if(lastAnalogChannelRead==PITCH && lastAnalogValues[PITCH]!=analogValues[PITCH]) setFrequency(constrain(mapLookup[analogValues[PITCH]]<<2,100,1000));
     if(lastAnalogChannelRead==WS_1 && lastAnalogValues[WS_1]!=analogValues[WS_1]) analogValues[WS_1]= mapLookup[analogValues[WS_1]];
     if(lastAnalogChannelRead==WS_2 && lastAnalogValues[WS_2]!=analogValues[WS_2]) analogValues[WS_2]= mapLookup[analogValues[WS_2]];
     firstRead=true;
-  //start the ADC - at completion the interupt will be called again
+    //start the ADC - at completion the interupt will be called again
     startConversion();
 
   }
   else{ 
     /* 
-    at the first reading off the ADX (which will not used) 
-    something else will happen the input pin will briefly turn to output to 
-    discarge charge built up in passive mixing ciruit using zener diodes
-    because zeners have some higher unpredictable capacitance, various voltages might get stuck on the pin
-    */
+     at the first reading off the ADX (which will not used) 
+     something else will happen the input pin will briefly turn to output to 
+     discarge charge built up in passive mixing ciruit using zener diodes
+     because zeners have some higher unpredictable capacitance, various voltages might get stuck on the pin
+     */
     if( mode==PHASE_DIST && analogChannelRead!=PITCH){ //this would somehow make the  reset pin trigger because the reset pin is already pulled to ground
     }
     else{ 
@@ -287,7 +328,7 @@ ISR(ADC_vect){ // interupt triggered ad completion of ADC counter
 void setFrequency(int _freq){ //set frequency of the interupt for primary oscillator
   _freq=1024-_freq;
   uint8_t preScaler=_freq>>7;
-  preScaler+=2; //*2
+  preScaler+=1; //*2
   pwmIncrement=4;
   _upIncrement=pwmIncrement*upIncrement;
   _downIncrement=pwmIncrement*downIncrement;
@@ -304,7 +345,7 @@ void setFrequency(int _freq){ //set frequency of the interupt for primary oscill
 
 // #### FUNCTIONS TO ACCES ADC REGISTERS
 void init() {
-  
+
   ADMUX  = 0;
   bitWrite(ADCSRA,ADEN,1); //adc enabled
   bitWrite(ADCSRA,ADPS2,1); // set prescaler
@@ -338,3 +379,11 @@ uint16_t getConversionResult() {
   uint16_t result = ADCL;
   return result | (ADCH<<8);
 }
+
+
+
+
+
+
+
+
