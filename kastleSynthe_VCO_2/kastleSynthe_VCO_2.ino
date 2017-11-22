@@ -186,8 +186,8 @@ while(millis()-_time<4){
    loop(); 
    }
    */
-      _delay_us(4000);
-  // while(startupRead<12){ _delay_us(10); }
+      _delay_us(100);
+   while(startupRead<12){ loop(); }
   //  } //read voltages
   XYmode=true; //if all pots are hight and mode is HIGH than render XY mode instead
   if(analogValues[0]<HIGH_THRES)  XYmode=false;
@@ -429,9 +429,9 @@ void synthesis(){
       _saw=(((255-(_phase>>8))*(analogValues[WS_2]))>>8);
       // uint8_t _p=(_phase4 >> 8)+128;
       sample2 = ((_saw*wavetable[_phase4 >> 8] )>>8)+((wavetable[_phase5 >> 8]*(255-analogValues[WS_2]))>>8);
-      if(_lastSaw<_saw) _phase4=64<<8;
+      if(_lastSaw<_saw) _phase4=64<<8; // hard sync for phase distortion
       uint8_t shft=abs(_saw-_lastSaw);
-      if(shft>3) _phase5+=shft<<8;
+      if(shft>3) _phase5+=shft<<8; //soft sync for previous settings of waveshape
     }
     
   }
@@ -445,7 +445,6 @@ void synthesis(){
     sample=_sample;
     sample2 = (wavetable[_phase3+(_phase>>8)]);
   }
-
 
   if(mode==TAH){
     if((_phase2 >> 8)>analogValues[WS_2])  _phs=_phase>>8, sample = (wavetable[_phs] );
