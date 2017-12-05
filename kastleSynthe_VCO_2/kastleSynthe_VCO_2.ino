@@ -10,7 +10,7 @@ KASTLE VCO v 1.5
  -voltage selectable synthesis modes on weak I/O Reset pin
 
  
- Writen by Vaclav Pelousek 2016
+ Writen by Vaclav Pelousek 2017
  open source license: CC BY SA
  http://www.bastl-instruments.com
  
@@ -66,7 +66,7 @@ KASTLE VCO v 1.5
 //#include <SNARE2_AT.h>
 //#include <TR_CB_AT.h>
 //#include <TR_CLAP_AT.h>
-#include <TR_HH_AT.h>
+
 //#include <TR_KICK_AT.h>
 //#include <TR_OH_AT.h>
 //#include <TR_RIM_AT.h>
@@ -74,6 +74,8 @@ KASTLE VCO v 1.5
 //#include <TR_TOM_AT.h>
 
 //#include "SINE.h" //sinewave wavetable - modified but originnaly from the Mozzi library
+
+#include "TR_HH_AT.h"
 //#include <SAW.h>
 //#include <CHEB4.h>
 
@@ -85,6 +87,8 @@ KASTLE VCO v 1.5
 //SoftwareSerial mySerial(Rx, Tx); //use only for debugging
 
 //global variables
+
+
 #define WSMAP_POINTS 5
 uint16_t wsMap[10]={
   0,63,127,191,234,   15,100,160,210,254};
