@@ -170,42 +170,13 @@ void createLookup() {
 
 bool XYmode;
 uint8_t startupRead = 0;
-void setup()  { //happends at the startup
-  writeWave(0);
-  digitalWrite(5, HIGH); //turn on pull up resistor for the reset pin
-  // createLookup(); //mapping of knob values is done thru a lookuptable which is generated at startup from defined values
-  //set outputs
-  pinMode(0, OUTPUT);
-  pinMode(1, OUTPUT);
-  //serial for debugging only
-  //mySerial.begin(9600);
+uint8_t bitTransmition[6];
+uint8_t message[6];
+uint8_t bitIncrement;
 
-  setTimers(); //setup interrupts
 
-  //setup ADC and run it in interrupt
-  init();
-  connectChannel(analogChannelRead);
-  startConversion();
-  //long _time=millis();
-  /*
-    while(millis()-_time<4){
-    loop();
-    }
-  */
-  _delay_us(100);
-  while (startupRead < 12) {
-    loop();
-  }
-  //  } //read voltages
-  XYmode = true; //if all pots are hight and mode is HIGH than render XY mode instead
-  if (analogValues[0] < HIGH_THRES)  XYmode = false;
-  for (uint8_t i = 1; i < 4; i++) if (analogValues[i] < 200) XYmode = false; //HIGH_THRES
-  
-  setFrequency(400);
-  setFrequency2(400);
-  analogValues[WS_2] = 0;
-  
-}
+
+
 
 void setTimers(void)
 {
@@ -247,6 +218,10 @@ void setTimers(void)
   // GTCCR  = (1 << PWM1B) | (1 << COM1B1); // PWM, output on pb4, compare with OCR1B (see interrupt below), reset on match with OCR1C
   //OCR1C  = 0xff;                         // 255
   // TCCR1  = (1 << CS10);                  // no prescale
+
+  PCMSK = 0;
+  bitWrite(PCMSK, PCINT4, 1);
+  bitWrite(GIMSK, PCIE, 1);
 
   sei();
   // TIMSK |=_BV(TOIE0);
@@ -341,28 +316,28 @@ uint8_t _phase3;
 */
 ISR(TIMER1_COMPA_vect)  // render primary oscillator in the interupt
 {
-  OCR0A = sample;//(sample+sample2)>>1;
-  OCR0B = sample2;//_phs;// sample90;
+  OCR0A =  message[1];//bitTransmition[1];//sample;//(sample+sample2)>>1;
+  // OCR0B = bitTransmition[2];//sample2;//_phs;// sample90;
+  /*
+    //_lastPhase=_phase;
+    _phase += frequency;
 
-  //_lastPhase=_phase;
-  _phase += frequency;
+    _phase2 += frequency2;
+    _phase4 += frequency4;
+    _phase5 += frequency5;
+    if (mode) { // other than FM, FM=0
+      _phase3 = _phase2 >> 5;
+      //(frequency2+1)<<1;
 
-  _phase2 += frequency2;
-  _phase4 += frequency4;
-  _phase5 += frequency5;
-  if (mode) { // other than FM, FM=0
-    _phase3 = _phase2 >> 5;
-    //(frequency2+1)<<1;
+      //(frequency2-1)*3;
+      _phase6 += frequency6;
+    }
+    else {
+      _phs = (_phase + (analogValues[WS_2] * wavetable[_phase2 >> 8])) >> 6;
+      sample = (wavetable[_phs] );
+    }
 
-    //(frequency2-1)*3;
-    _phase6 += frequency6;
-  }
-  else {
-    _phs = (_phase + (analogValues[WS_2] * wavetable[_phase2 >> 8])) >> 6;
-    sample = (wavetable[_phs] );
-  }
-
-
+  */
 
   /*
     out+=incr; // increment the oscillator saw core
@@ -475,10 +450,10 @@ void loop() {
   //FM + PHS DIST
   // t&h + chord
   // noise sample
-  synthesis();
-  
+  //synthesis();
+
   //modeDetect();
-  mode=NOISE;
+  mode = NOISE;
 
 }
 void modeDetect() {
@@ -614,7 +589,82 @@ uint16_t getConversionResult() {
 
 
 
+void setup()  { //happends at the startup
+  writeWave(0);
+  digitalWrite(5, HIGH); //turn on pull up resistor for the reset pin
+  // createLookup(); //mapping of knob values is done thru a lookuptable which is generated at startup from defined values
+  //set outputs
+  pinMode(0, OUTPUT);
+  pinMode(1, OUTPUT);
+  //serial for debugging only
+  //mySerial.begin(9600);
 
+  setTimers(); //setup interrupts
+
+  //setup ADC and run it in interrupt
+  //init();
+  //connectChannel(analogChannelRead);
+  // startConversion();
+  //long _time=millis();
+  /*
+    while(millis()-_time<4){
+    loop();
+    }
+  */
+  _delay_ms(100);
+  while (startupRead < 12) {
+    loop();
+  }
+  //  } //read voltages
+  XYmode = true; //if all pots are hight and mode is HIGH than render XY mode instead
+  if (analogValues[0] < HIGH_THRES)  XYmode = false;
+  for (uint8_t i = 1; i < 4; i++) if (analogValues[i] < 200) XYmode = false; //HIGH_THRES
+
+  setFrequency(400);
+  setFrequency2(400);
+  analogValues[WS_2] = 0;
+
+}
+bool resync = false;
+bool resyncReady = false;
+uint8_t resyncCounter = 0;
+ISR(PCINT0_vect) {
+  if (bitRead(PINB, 4)) { //rising edge
+    bool inBit = bitRead(PINB, 3); //read dataPin
+    if (resync) {
+      bitIncrement=0;
+      if (!inBit) resyncCounter++;
+      
+      if (resyncCounter > 6) resyncReady = true;
+     
+      if (inBit && resyncReady) {
+        resyncCounter = 0;
+        bitIncrement = 0;
+        resync = false;
+        resyncReady = false;
+        for (uint8_t i = 0; i < 6; i++) bitTransmition[i] = 0;
+      }
+      else if(inBit) resyncCounter=0;
+    }
+    bitWrite(bitTransmition[bitIncrement / 8], 7-(bitIncrement % 8), inBit);
+    bitIncrement++;
+    if (bitIncrement >= (6 * 8)) {
+      bitIncrement = 0; //6 bytes
+      if (bitTransmition[0] == 132 && bitTransmition[5] == 0) {
+        resync = false;
+        resyncCounter = 0;
+        resyncReady = 0;
+        for (uint8_t i = 0; i < 6; i++) message[i] = bitTransmition[i];
+      }
+      else {
+        resync = true;
+        resyncCounter = 0;
+        resyncReady = false;
+      }
+    }
+  }
+
+}
 
 
 
