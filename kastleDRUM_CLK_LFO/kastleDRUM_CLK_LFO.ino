@@ -3,24 +3,42 @@
 KASTLE LFO v 1.0
 
 
-Features
+Kastle Drum Features 
+  -8 drum synthesis styles
+  -”noises” output for less tonal content
+  -DRUM selects drum sounds
+  -acceleration charge dynamic envelope
+  -decay time
+  -PITCH control with offset and CV input with attenuator
+  -voltage-controllable clock with square and triangle output
+  -stepped voltage generator with random, 8 step and 16 step loop mode
+  -2 I/O CV ports that can be routed to any patch point 
+  -the main output can drive headphones
+  -3x AA battery operation or USB power selectable by a switch
+  -open source
+  -durable black & gold PCB enclosure
 
-Writen by Vaclav Pelousek 2016
-open source license: CC BY SA
-http://www.bastl-instruments.com
- 
- 
--software written in Arduino 1.0.6 - used to flash ATTINY 85 running at 8mHz
--created with help of the heavenly powers of internet and several tutorials that you can google out
--i hope somebody finds this code usefull
 
-thanks to 
--Lennart Schierling for making some work on the register access
--Uwe Schuller for explaining the capacitance of zener diodes
--Peter Edwards for making the inspireing bitRanger
--Rob Hordijk for inventing the amazing concept of the Rungler
--Ondrej Merta for being the best boss
--and the whole bastl crew that made this project possible
+
+  Writen by Vaclav Pelousek 2020
+  based on the earlier kastle v1.5
+  open source license: CC BY SA
+  http://www.bastl-instruments.com
+
+  -this is the code for the LFO chip of the Kastle
+  -software written in Arduino 1.8.12 - used to flash ATTINY 85 running at 8mHz
+  http://highlowtech.org/?p=1695
+  -created with help of the heavenly powers of internet and several tutorials that you can google out
+  -i hope somebody finds this code usefull (i know it is a mess :( )
+
+  thanks to
+  -Lennart Schierling for making some work on the register access
+  -Uwe Schuller for explaining the capacitance of zener diodes
+  -Peter Edwards for making the inspireing bitRanger
+  -Ondrej Merta for being the best boss
+  -and the whole bastl crew that made this project possible
+  -Arduino community and the forums for picking ups bits of code to setup the timers & interrupts
+  -v1.5 and kastle drum uses bits of code from miniMO DCO http://www.minimosynth.com/
 
  */
  

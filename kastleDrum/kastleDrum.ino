@@ -1,21 +1,46 @@
 
 /*
   KASTLE DRUM
+  
+The Kastle Drum is a special edition of Bastl’s classic mini modular synth focusing on algorithmic industrial glitchy drums
+How do you generate rhythm on a patchable drum machine that has neither buttons, nor a programmable sequencer? You discover it! 
+
+Drum sound synthesis with a unique dynamic acceleration charged envelope makes this rhythm box surprisingly versatile and extremely fun to play. 
+The built-in VC clock generator with a stepped pattern sequencer can either run on its own or it can be synchronized to analog clock, 
+while retaining the triangle LFO for parameter modulation.
+
+The Kastle Drum is a mini modular synthesizer with a headphone output, 
+2 in/out ports for interfacing other gear, and it runs on just 3 AA batteries. It is ideal for beginners in modular synthesis, 
+but it will add some quite unique functionality to any modular synthesizer system. It delivers the fun of modular synthesis at a 
+low price and fits into your pocket so you can play it anywhere!
 
 
-  Features
-  -5 synthesis modes = phase modulation, phase distortion, tarck & hold modulation, formant synthesis, noise wtf
-  -regular & alternative waveform output by 2 PWM channels
-  -3 sound parameters controlled by voltage inputs
-  -voltage selectable synthesis modes on weak I/O Reset pin
+
+Kastle Drum Features 
+  -8 drum synthesis styles
+  -”noises” output for less tonal content
+  -DRUM selects drum sounds
+  -acceleration charge dynamic envelope
+  -decay time
+  -PITCH control with offset and CV input with attenuator
+  -voltage-controllable clock with square and triangle output
+  -stepped voltage generator with random, 8 step and 16 step loop mode
+  -2 I/O CV ports that can be routed to any patch point 
+  -the main output can drive headphones
+  -3x AA battery operation or USB power selectable by a switch
+  -open source
+  -durable black & gold PCB enclosure
+
 
 
   Writen by Vaclav Pelousek 2020
+  based on the earlier kastle v1.5
   open source license: CC BY SA
   http://www.bastl-instruments.com
 
-
-  -software written in Arduino 1.0.6 - used to flash ATTINY 85 running at 8mHz
+  -this is the code for the VCO chip of the Kastle
+  -software written in Arduino 1.8.12 - used to flash ATTINY 85 running at 8mHz
+  http://highlowtech.org/?p=1695
   -created with help of the heavenly powers of internet and several tutorials that you can google out
   -i hope somebody finds this code usefull (i know it is a mess :( )
 
@@ -26,7 +51,7 @@
   -Ondrej Merta for being the best boss
   -and the whole bastl crew that made this project possible
   -Arduino community and the forums for picking ups bits of code to setup the timers & interrupts
-  -v1.5 uses bits of code from miniMO DCO http://www.minimosynth.com/
+  -v1.5 and kastle drum uses bits of code from miniMO DCO http://www.minimosynth.com/
 
 
 */
@@ -176,7 +201,7 @@ uint16_t decayTime = 50;
 uint8_t _sample;
 uint8_t _saw, _lastSaw;
 
-uint8_t decayVolume2 =0;
+uint8_t decayVolume2 = 0;
 
 void setup()  { //happends at the startup
   writeWave(0);
@@ -354,7 +379,7 @@ ISR(TIMER1_COMPA_vect)  // render primary oscillator in the interupt
   //_lastPhase=_phase;
   if (pitchEnv) {
     _phase += (frequency + (decayVolume));
-     _phase3 += (frequency + (decayVolume)); //frequency;//
+    _phase3 += (frequency + (decayVolume)); //frequency;//
     _phase2 += (frequency2 + (decayVolume));
   }
   else {
@@ -362,13 +387,13 @@ ISR(TIMER1_COMPA_vect)  // render primary oscillator in the interupt
     _phase3 += frequency;
     _phase2 += frequency2;
   }
-  _phase4 += frequency4;
+  if(!(_phase%4) )_phase4 += frequency4;
 
-  
+
   //_phase5 += frequency5;
   // _phase5 += frequency5;
   if (mode) { // other than FM, FM=0
-  //  _phase3 = _phase2 >> 5;
+    //  _phase3 = _phase2 >> 5;
     //(frequency2+1)<<1;
 
     //(frequency2-1)*3;
@@ -415,7 +440,7 @@ void setFrequency2(uint16_t input) {
     }
   */
   frequency2 = (input << 4) + 1;
-  frequency4 = 512-input;
+  frequency4 = 512 - input;
   //frequency5 = frequency2;
 }
 
@@ -428,9 +453,9 @@ void setFrequency(uint16_t input) {
   if (   mode == NOISE ) frequency = ((input - 200) << 2) + 1; //NOISE
   else if (mode > 3) frequency = (input) + 1;
   else frequency = ((input + addEnv) << 2) + 1;
-  frequency5=frequency;
+  frequency5 = frequency;
 
-  
+
   /*
     coarseVolChange = false;                            //reset the control condition for volume
     if (coarseFreqChange == false) {
@@ -460,24 +485,27 @@ int ultimateFold(int _input) {
 uint8_t _sample2, _lastSample2;
 #define SAMPLE_PHASE_SHIFT 3
 void synthesis() {
-
-  if((_phase3>>2)>=(analogValues[WS_1])<<4){
-      _phase3=0;
+  if (XYmode) {
+    sample2=decayVolume;
+  }
+  else {
+    if ((_phase3 >> 2) >= (analogValues[WS_1]) << 4) {
+      _phase3 = 0;
     }
-    _lastSample2=sample2;
-  _sample2 = (char)pgm_read_byte_near(sampleTable + (_phase3) )+128; //
- // _sample2 = (_sample2 * (wavetable[((_phase2+_phase3)>>8)+sample]>>1)) >> 7;
- if(analogValues[PITCH]>wavetable[_phase4>>8]) _sample2=_lastSample2;//128;//_lastSample2;
- //+(analogValues[WS_2]<<2)+ 
-  else _sample2=abs(_sample2-_lastSample2);
-  sample2 =  ((_sample2 * (decayVolume2)) >> 8);
-
+    _lastSample2 = sample2;
+    _sample2 = (char)pgm_read_byte_near(sampleTable + (_phase3) ) + 128; //
+    // _sample2 = (_sample2 * (wavetable[((_phase2+_phase3)>>8)+sample]>>1)) >> 7;
+    if (analogValues[PITCH] > wavetable[(_phase4 >> 9) + (_sample2>>5)]) _sample2 = _lastSample2; //128;//_lastSample2;
+    //+(analogValues[WS_2]<<2)+
+    else _sample2 = abs(_sample2 - _lastSample2);
+    sample2 =  ((_sample2 * (decayVolume2)) >> 8);
+  }
   if (mode == FM) {
 
     if (XYmode) {
       _phs90 = _phs + 64;
 
-      sample2 = (wavetable[_phs90] );
+     // sample2 = (wavetable[_phs90] );
 
     }
     else {
@@ -520,9 +548,9 @@ void synthesis() {
     }
   }
 
-  if(mode>2){
-    if((_phase>>2)>=(analogValues[WS_2]-100)<<5){
-     // _phase=0;
+  if (mode > 2) {
+    if ((_phase >> 2) >= (analogValues[WS_2] - 100) << 5) {
+      // _phase=0;
     }
   }
   if (mode == 3) {
@@ -575,7 +603,7 @@ void loop() {
   synthesis();
   renderDecay();
   trigDetect();
-  
+
 
 }
 uint8_t trigState = 0;
@@ -601,10 +629,10 @@ uint8_t trigger(uint8_t intensity_1, uint8_t intensity_2) {
   //lastTriggerTime=triggerTime;
   //triggerTime=some increment shit
   //decayTime=triggerTime-lastTrigerTime;
-  if (abs(intensity_1 - intensity_2) == 1) decayVolume = 128, decayVolume2=255;
-  else decayVolume = 255, decayVolume2=128;
+  if (abs(intensity_1 - intensity_2) == 1) decayVolume = 128, decayVolume2 = 255;
+  else decayVolume = 255, decayVolume2 = 150;
 
-  
+
 }
 
 
@@ -612,7 +640,8 @@ uint8_t analogChannelSequence[6] = {0, 1, 0, 2, 0, 3};
 uint8_t analogChannelReadIndex;
 
 void setDecay() {
-  if (analogValues[WS_2] > 100) decayTime = constrain(analogValues[WS_2] - 120,1,255), pitchEnv = 0;
+ // decayTime2=analogValues[WS_2];
+  if (analogValues[WS_2] > 100) decayTime = constrain(analogValues[WS_2] - 120, 1, 255), pitchEnv = 0;
   else decayTime = (100 - analogValues[WS_2]), pitchEnv = 255; //decayTime;
 
 
@@ -632,7 +661,7 @@ ISR(ADC_vect) { // interupt triggered ad completion of ADC counter
     analogChannelRead = analogChannelSequence[analogChannelReadIndex];
     connectChannel(analogChannelRead);
     // set controll values if relevant (value changed)
-    if (lastAnalogChannelRead == PITCH && lastAnalogValues[PITCH] != analogValues[PITCH]) setFrequency(analogValues[PITCH] << 2), decayVolume2 = constrain(decayVolume2 + ((abs(lastAnalogValues[PITCH] - analogValues[PITCH]) << 2)), 0, 255);; //constrain(mapLookup[,0,1015)); //
+    if (lastAnalogChannelRead == PITCH && lastAnalogValues[PITCH] != analogValues[PITCH]) setFrequency(analogValues[PITCH] << 2), decayVolume2 = constrain(decayVolume2 + ((abs(lastAnalogValues[PITCH] - analogValues[PITCH]) << 3)), 0, 255);; //constrain(mapLookup[,0,1015)); //
     if (lastAnalogChannelRead == WS_1 && lastAnalogValues[WS_1] != analogValues[WS_1])  setFrequency2(analogValues[WS_1] << 2), decayVolume = constrain(decayVolume + ((abs(lastAnalogValues[WS_1] - analogValues[WS_1]) << 2)), 0, 255);
     if (lastAnalogChannelRead == WS_2 && lastAnalogValues[WS_2] != analogValues[WS_2]) analogValues[WS_2] = analogValues[WS_2], setDecay();
     firstRead = true;
@@ -689,7 +718,7 @@ void renderDecay() {
   if (decayTime != 0) {
     if (1) {
       decayCounter2 += 6;
-      if (decayCounter2 >= (decayTime>>1))
+      if (decayCounter2 >= (decayTime))
       {
         decayCounter2 = 0;
         if (decayVolume2 > 0) decayVolume2 -= ((decayVolume2 >> 6) + 1);
@@ -697,7 +726,7 @@ void renderDecay() {
       }
     }
   }
-  
+
 }
 
 /*
