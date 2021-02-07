@@ -5,7 +5,7 @@ by Václav Peloušek
 www.bastl-instruments.com
 
 Original Kastle Synth is loaded with
-kastleSynthe_VCO and kaslteSynth_LFO
+kastleSynthe_VCO and kastleSynth_LFO
 
 other firmwares are work in progress
 
