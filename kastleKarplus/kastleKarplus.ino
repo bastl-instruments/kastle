@@ -13,7 +13,7 @@ KASTLE VCO v 1.0
  
  ideas 
  -transfer wavetable to ram and see if it is faster
- -update parameters at the beginning of waveoform cycle to see if it improoves stability
+ -update parameters at the beginning of a waveform cycle to see if it improoves stability
  -dynamicly lower the resolution of the VCO
  
  Writen by Vaclav Pelousek 2016
@@ -28,7 +28,7 @@ KASTLE VCO v 1.0
  thanks to 
  -Lennart Schierling for making some work on the register access
  -Uwe Schuller for explaining the capacitance of zener diodes
- -Peter Edwards for making the inspireing bitRanger
+ -Peter Edwards for making the inspiring bitRanger
  -Ondrej Merta for being the best boss
  -and the whole bastl crew that made this project possible
  
