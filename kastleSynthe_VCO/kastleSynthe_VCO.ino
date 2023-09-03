@@ -302,7 +302,7 @@ void setFrequency(int _freq){ //set frequency of the interupt for primary oscill
 
 
 
-// #### FUNCTIONS TO ACCES ADC REGISTERS
+// #### FUNCTIONS TO ACCESS ADC REGISTERS
 void init() {
   
   ADMUX  = 0;
